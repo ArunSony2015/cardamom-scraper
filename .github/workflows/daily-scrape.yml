@@ -6,7 +6,6 @@ on:
     - cron: '30 17 * * *'
   workflow_dispatch:
 
-# Required so the workflow can commit the updated CSV back to the repo
 permissions:
   contents: write
 
@@ -32,31 +31,45 @@ jobs:
 
       - name: Run scraper
         env:
-          # Email
           SMTP_HOST: smtp.gmail.com
           SMTP_PORT: '587'
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-
-          # Telegram
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
-          # WhatsApp
           CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
           CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
         run: python scraper.py
 
-      - name: Commit and push updated CSV
+      - name: Commit updated CSV to repo
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/auction_data.csv
-          # Only commit if there are actual changes (no error if no changes)
           if git diff --staged --quiet; then
             echo "No changes to commit."
           else
             git commit -m "Auto: append auction data $(date -u +'%Y-%m-%d')"
             git push
           fi
+
+      - name: Install rclone
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.RCLONE_CONF }}" > ~/.config/rclone/rclone.conf
+
+      - name: Upload CSV to Google Drive
+        run: |
+          # Creates folder "CardamomAuction" in root of your Drive if not exists,
+          # then uploads/overwrites the CSV inside it.
+          rclone mkdir gdrive:CardamomAuction || true
+          rclone copy data/auction_data.csv gdrive:CardamomAuction/ --progress
+
+      - name: Cleanup rclone config
+        if: always()
+        run: rm -f ~/.config/rclone/rclone.conf
