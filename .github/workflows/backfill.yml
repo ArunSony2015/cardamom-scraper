@@ -1,0 +1,55 @@
+name: One-Time Backfill — Cardamom Auction History
+
+# Manual trigger only — no schedule. Run once via Actions tab.
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Backfill start date (YYYY-MM-DD)'
+        required: true
+        default: '2026-01-01'
+      max_pages:
+        description: 'Max archive pages to scan'
+        required: false
+        default: '30'
+
+permissions:
+  contents: write
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run backfill
+        env:
+          BACKFILL_START: ${{ github.event.inputs.start_date }}
+          BACKFILL_MAX_PAGES: ${{ github.event.inputs.max_pages }}
+        run: python backfill.py
+
+      - name: Commit backfilled CSV
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/auction_data.csv
+          if git diff --staged --quiet; then
+            echo "No changes to commit (all rows already in CSV)."
+          else
+            git commit -m "Backfill: historical auction data from ${{ github.event.inputs.start_date }}"
+            git push
+          fi
