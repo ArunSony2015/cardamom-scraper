@@ -53,23 +53,3 @@ jobs:
             git commit -m "Auto: append auction data $(date -u +'%Y-%m-%d')"
             git push
           fi
-
-      - name: Install rclone
-        run: |
-          curl https://rclone.org/install.sh | sudo bash
-
-      - name: Configure rclone
-        run: |
-          mkdir -p ~/.config/rclone
-          echo "${{ secrets.RCLONE_CONF }}" > ~/.config/rclone/rclone.conf
-
-      - name: Upload CSV to Google Drive
-        run: |
-          # Creates folder "CardamomAuction" in root of your Drive if not exists,
-          # then uploads/overwrites the CSV inside it.
-          rclone mkdir gdrive:CardamomAuction || true
-          rclone copy data/auction_data.csv gdrive:CardamomAuction/ --progress
-
-      - name: Cleanup rclone config
-        if: always()
-        run: rm -f ~/.config/rclone/rclone.conf
